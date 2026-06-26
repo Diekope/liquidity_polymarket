@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POLYMARKET TERMINAL</title>
+    <meta name="description" content="Bloomberg-style real-time terminal for Polymarket tickers, volume, and trades.">
+    <!-- Google Fonts for authentic monospace and UI typography -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,600;1,400&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="terminal-container">
+        <!-- Terminal Header -->
+        <header class="terminal-header">
+            <div class="header-left">
+                <span class="logo-txt">PMKT</span>
+                <span class="divider">|</span>
+                <span class="status-indicator" id="connection-status">WS: OFFLINE</span>
+            </div>
+            <div class="header-center">
+                <span id="active-ticker-label">TICKER: SELECT A MARKET</span>
+                <span id="header-signal-badge" class="signal-badge neutral">NEUTRAL</span>
+            </div>
+            <div class="header-right" style="display: flex; align-items: center; gap: 12px;">
+                <button id="web3-connect-btn" class="terminal-btn" style="background-color: #121824; border: 1px solid var(--bb-cyan); color: var(--bb-cyan); font-size: 11px; padding: 3px 8px; cursor: pointer; border-radius: 2px;">CONNECT WALLET</button>
+                <span id="current-date">--/--/----</span>
+                <span id="current-time">00:00:00</span>
+            </div>
+        </header>
+
+        <!-- Command Line / Search Input -->
+        <div class="command-bar">
+            <div class="prompt-prefix">PMKT SEARCH &gt;</div>
+            <input type="text" id="command-input" placeholder="ENTER SLUG, KEYWORD, OR POLYMARKET URL (e.g. trump-out-as-president-by-june-30) AND PRESS ENTER" autocomplete="off" autofocus>
+            <button id="search-btn" class="terminal-btn">GO</button>
+        </div>
+
+        <!-- Search Results Dropdown/Overlay (Hidden by default) -->
+        <div id="search-results-panel" class="search-results-panel hidden">
+            <div class="panel-header">
+                <span>SEARCH RESULTS (SELECT MARKET TO MONITOR)</span>
+                <button id="close-results-btn" class="close-btn">&times;</button>
+            </div>
+            <div class="results-list" id="results-list-container">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+
+        <!-- Main Workspace -->
+        <main class="terminal-workspace">
+            
+            <!-- Left Column: Trades Feed, Outcomes, Metadata -->
+            <section class="stats-panel" style="display: flex; flex-direction: column; overflow-y: auto;">
+                
+                <!-- Prices / Outcomes Panel -->
+                <div class="panel-box" style="margin-bottom: 8px; flex-shrink: 0;">
+                    <h2 class="panel-title">SECURITY OUTCOMES & PRICES</h2>
+                    <div class="panel-content outcomes-grid" id="outcomes-container">
+                        <div class="no-data-msg">Search and select a market to load outcome prices.</div>
+                    </div>
+                </div>
+
+                <!-- Trading Mode Tabs -->
+                <div class="panel-box" id="trading-panel" style="margin-bottom: 8px; flex-shrink: 0; display: flex;">
+                    <div class="trading-tabs">
+                        <button id="paper-trading-tab" class="trading-tab-btn active" type="button">PAPER</button>
+                        <button id="real-trading-tab" class="trading-tab-btn" type="button">REAL TRADING</button>
+                    </div>
+
+                    <div class="trading-tab-pane active" id="paper-trading-pane">
+                <!-- Paper Trading Panel (toggled by checkbox) -->
+                <div id="paper-trading-panel" style="display: flex; flex-direction: column;">
+                    <h2 class="panel-title flex-title-bar">
+                        <span>AUTO PAPER TRADING</span>
+                        <span id="paper-pnl-summary" class="text-white" style="font-weight: bold; font-size: 11px;">USDC: $15.00</span>
+                    </h2>
+                    <div class="panel-content" style="padding: 10px; gap: 6px;">
+                        <!-- TP, SL & Hard TP Inputs -->
+                        <div style="background-color: #0b0c10; border: 1px solid var(--bb-border); padding: 6px 8px; font-size: 11px; margin-bottom: 2px; display: flex; flex-direction: column; gap: 4px;">
+                            <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #111; padding-bottom: 3px; align-items: center;">
+                                <span style="color: var(--bb-cyan); font-weight: bold;">TARGET LIMITS:</span>
+                                <div>
+                                    <span style="color: var(--text-muted); font-weight: 600;">Hard TP:</span>
+                                    <input type="checkbox" id="paper-hard-tp-enabled" checked style="cursor: pointer; margin-right: 2px; vertical-align: middle;">
+                                    <input type="number" id="paper-hard-tp-input" value="60.0" step="5" style="width: 35px; background: #121824; border: 1px solid var(--bb-border); color: #fff; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 1px 2px; vertical-align: middle;">
+                                    <span style="color: var(--bb-green); font-weight: 600; vertical-align: middle;">%</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2px;">
+                                <div>
+                                    <span style="color: var(--text-muted); font-weight: 600;">TP (Rev):</span>
+                                    <input type="number" id="paper-tp-input" value="8.0" step="0.5" min="0.1" style="width: 40px; background: #121824; border: 1px solid var(--bb-border); color: #fff; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 1px 2px;">
+                                    <span style="color: var(--bb-green); font-weight: 600;">%</span>
+                                </div>
+                                <div>
+                                    <span style="color: var(--text-muted); font-weight: 600;">SL:</span>
+                                    <input type="number" id="paper-sl-input" value="10.0" step="0.5" style="width: 40px; background: #121824; border: 1px solid var(--bb-border); color: #fff; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 1px 2px;">
+                                    <span style="color: var(--bb-red); font-weight: 600;">%</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; border-top: 1px dashed #212936; padding-top: 4px;">
+                                <div>
+                                    <span style="color: var(--text-muted); font-weight: 600;">Min Hold:</span>
+                                    <input type="number" id="paper-min-hold-input" value="5" min="0" max="60" style="width: 35px; background: #121824; border: 1px solid var(--bb-border); color: #fff; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 1px 2px;">
+                                    <span style="color: var(--bb-cyan); font-weight: 600;">s</span>
+                                </div>
+                                <div>
+                                    <span style="color: var(--text-muted); font-weight: 600;">Min TP:</span>
+                                    <input type="number" id="paper-min-tp-input" value="5.0" step="0.5" min="0.0" style="width: 35px; background: #121824; border: 1px solid var(--bb-border); color: #fff; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 1px 2px;">
+                                    <span style="color: var(--bb-green); font-weight: 600;">%</span>
+                                </div>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px; border-top: 1px dashed #212936; padding-top: 4px;">
+                                <div>
+                                    <span style="color: var(--text-muted); font-weight: 600;">Est. Fees:</span>
+                                    <input type="number" id="paper-fee-input" value="2.0" step="0.5" min="0.0" style="width: 35px; background: #121824; border: 1px solid var(--bb-border); color: #fff; text-align: center; font-family: var(--font-mono); font-size: 11px; padding: 1px 2px;">
+                                    <span style="color: var(--bb-red); font-weight: 600;">%</span>
+                                </div>
+                                <span style="color: var(--text-muted); font-size: 10px;">(Spread + Slippage drag)</span>
+                            </div>
+                        </div>
+
+                        <!-- Active Position Details -->
+                        <div style="background-color: #0b0c10; border: 1px solid var(--bb-border); padding: 8px; font-size: 12px;">
+                            <div style="font-weight: bold; color: var(--bb-cyan); margin-bottom: 4px; border-bottom: 1px solid #111; padding-bottom: 2px; display: flex; justify-content: space-between;">
+                                <span>ACTIVE POSITION</span>
+                                <span id="paper-active-pnl" style="font-weight: bold;">--</span>
+                            </div>
+                            <div id="paper-active-position" style="display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px;">
+                                <span class="text-muted">NO ACTIVE POSITIONS</span>
+                            </div>
+                        </div>
+
+                        <!-- Manual Trading Buttons -->
+                        <div style="background-color: #0b0c10; border: 1px solid var(--bb-border); padding: 8px; font-size: 12px; display: flex; flex-direction: column; gap: 4px;">
+                            <div style="font-weight: bold; color: var(--bb-cyan); margin-bottom: 2px; border-bottom: 1px solid #111; padding-bottom: 2px;">
+                                MANUAL TRADE FORCING
+                            </div>
+                            <div style="display: flex; gap: 6px;">
+                                <button id="force-buy-yes-btn" class="terminal-btn" style="flex: 1; background: #062b16; border: 1px solid var(--bb-green); color: var(--bb-green); font-weight: bold; font-size: 11px; padding: 4px 0; cursor: pointer;">FORCE YES</button>
+                                <button id="force-buy-no-btn" class="terminal-btn" style="flex: 1; background: #3b0d11; border: 1px solid var(--bb-red); color: var(--bb-red); font-weight: bold; font-size: 11px; padding: 4px 0; cursor: pointer;">FORCE NO</button>
+                                <button id="force-exit-btn" class="terminal-btn" style="flex: 1; background: #2b1f06; border: 1px solid var(--bb-amber); color: var(--bb-amber); font-weight: bold; font-size: 11px; padding: 4px 0; cursor: pointer;">FORCE EXIT</button>
+                            </div>
+                        </div>
+                        
+                        <!-- Paper Trades Log Table -->
+                        <div style="background-color: #030304; border: 1px solid #111115; max-height: 100px; overflow-y: auto;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 11px; text-align: left;" id="paper-history-table">
+                                <thead style="position: sticky; top: 0; background-color: #0d0f14; z-index: 10; font-size: 10px; border-bottom: 1px solid var(--bb-border);">
+                                    <tr>
+                                        <th style="padding: 4px 6px; color: var(--bb-cyan); width: 14%;">TIME</th>
+                                        <th style="padding: 4px 6px; color: var(--bb-cyan); width: 14%;">ASSET</th>
+                                        <th style="padding: 4px 6px; color: var(--bb-cyan); text-align: right; width: 16%;">ENTRY</th>
+                                        <th style="padding: 4px 6px; color: var(--bb-cyan); text-align: right; width: 16%;">EXIT</th>
+                                        <th style="padding: 4px 6px; color: var(--bb-cyan); text-align: right; width: 17%;">PnL ($)</th>
+                                        <th style="padding: 4px 6px; color: var(--bb-cyan); width: 23%;">REASON</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="paper-history-tbody">
+                                    <tr>
+                                        <td colspan="6" class="no-data-msg" style="padding: 12px; font-size: 11px;">NO CLOSED POSITIONS</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                    </div>
+
+                    <div class="trading-tab-pane" id="real-trading-pane">
+                        <h2 class="panel-title flex-title-bar">
+                            <span>REAL TRADING</span>
+                            <span id="real-trading-summary" class="text-muted" style="font-weight: bold; font-size: 11px;">STANDBY</span>
+                        </h2>
+                        <div class="panel-content" style="padding: 10px; gap: 8px;">
+                            <div class="real-trading-status-box">
+                                <div class="control-row">
+                                    <span class="control-label">AUTO REAL TRADING:</span>
+                                    <label class="switch-container" style="display: flex; align-items: center; cursor: pointer;">
+                                        <input type="checkbox" id="real-trading-toggle" style="cursor: pointer; margin-right: 6px;">
+                                        <span id="real-trading-toggle-label" class="text-red" style="font-size: 11px; font-weight: bold;">INACTIVE</span>
+                                    </label>
+                                </div>
+                                <div class="control-row">
+                                    <span class="control-label">WALLET (EOA):</span>
+                                    <span id="real-wallet-status" class="text-muted">NOT CONNECTED</span>
+                                </div>
+                                <div class="control-row" style="display: none;">
+                                    <span class="control-label">POLYMARKET PROXY:</span>
+                                    <input type="text" id="real-proxy-input" placeholder="0x... (Gnosis Safe)" style="flex: 1; background: #121824; border: 1px solid var(--bb-border); color: #fff; font-family: var(--font-mono); font-size: 11px; padding: 2px 4px; text-align: left; max-width: 250px; margin-left: 12px; border-radius: 2px;">
+                                </div>
+                                <div class="control-row" id="real-clob-auth-row" style="display: none;">
+                                    <span class="control-label">CLOB API KEY:</span>
+                                    <div style="display: flex; align-items: center; gap: 8px;">
+                                        <span id="real-clob-status" class="text-muted">NOT ACTIVATED</span>
+                                        <button id="real-clob-activate-btn" class="terminal-btn" style="padding: 1px 4px; font-size: 10px; margin: 0;" type="button">ACTIVATE</button>
+                                    </div>
+                                </div>
+                                <div class="control-row">
+                                    <span class="control-label">BALANCE:</span>
+                                    <span id="real-balance-status" class="text-muted">USDC: --</span>
+                                </div>
+                                <div class="control-row">
+                                    <span class="control-label">ACTIVE POSITION:</span>
+                                    <span id="real-active-position" class="text-muted">NONE</span>
+                                </div>
+                                <div class="control-row">
+                                    <span class="control-label">ORDER SIZE:</span>
+                                    <span id="real-order-size-label" class="text-white">10% PORTFOLIO, MINIMUM 1 USDC</span>
+                                </div>
+                                <div class="control-row">
+                                    <span class="control-label">LAST ATTEMPT:</span>
+                                    <span id="real-attempt-status" class="real-attempt-status idle">IDLE</span>
+                                </div>
+                            </div>
+
+                            <div class="real-trading-actions">
+                                <button id="real-force-buy-yes-btn" class="terminal-btn real-buy-btn" type="button">BUY YES</button>
+                                <button id="real-force-buy-no-btn" class="terminal-btn real-sell-btn" type="button">BUY NO</button>
+                                <button id="real-sell-all-btn" class="terminal-btn real-exit-btn" type="button">SELL ALL</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Transaction Ledger Widget -->
+                <div class="panel-box flex-column-container" style="flex-grow: 1; min-height: 380px; margin-bottom: 8px; flex-shrink: 0;">
+                    <h2 class="panel-title flex-title-bar">
+                        <span>REAL-TIME TRANSACTION LEDGER</span>
+                        <span class="ticker-speed" id="trade-speed-indicator">0.0 TRADES/MIN</span>
+                    </h2>
+                    <div class="ledger-table-container">
+                        <table class="ledger-table" id="trades-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 15%;">TIMESTAMP</th>
+                                    <th style="width: 35%;">OUTCOME</th>
+                                    <th style="width: 10%;">SIDE</th>
+                                    <th style="width: 12%; text-align: right;">PRICE</th>
+                                    <th style="width: 13%; text-align: right;">SIZE (QTY)</th>
+                                    <th style="width: 15%; text-align: right;">TOTAL (USDC)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="trades-tbody">
+                                <tr id="no-trades-row">
+                                    <td colspan="6" class="no-data-msg">NO REAL-TIME TRANSACTIONS INGESTED YET</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Market Info Panel -->
+                <div class="panel-box" style="margin-bottom: 8px; flex-shrink: 0;">
+                    <h2 class="panel-title">DESCRIPTIVE METADATA</h2>
+                    <div class="panel-content">
+                        <div class="meta-row font-large">
+                            <span class="meta-label">QUESTION:</span>
+                            <span class="meta-value" id="market-question">NO ACTIVE MARKET</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">SLUG:</span>
+                            <span class="meta-value text-amber" id="market-slug">-</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">CONDITION ID:</span>
+                            <span class="meta-value text-muted" id="market-condition-id">-</span>
+                        </div>
+                        <div class="meta-row">
+                            <span class="meta-label">END DATE:</span>
+                            <span class="meta-value" id="market-end-date">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Volume & Liquidity Panel -->
+                <div class="panel-box" style="margin-bottom: 8px; flex-shrink: 0;">
+                    <h2 class="panel-title">VOLUME & LIQUIDITY MATRIX</h2>
+                    <div class="panel-content">
+                        <div class="stat-large-box">
+                            <div class="stat-large-title">TOTAL CUMULATIVE VOLUME</div>
+                            <div class="stat-large-value text-green" id="market-volume">$0.00</div>
+                        </div>
+                        <div class="grid-2-col">
+                            <div class="stat-sub-box">
+                                <div class="stat-sub-title">24H VOLUME</div>
+                                <div class="stat-sub-value" id="market-volume-24h">$0.00</div>
+                            </div>
+                            <div class="stat-sub-box">
+                                <div class="stat-sub-title">TOTAL LIQUIDITY</div>
+                                <div class="stat-sub-value text-amber" id="market-liquidity">$0.00</div>
+                            </div>
+                        </div>
+                        <div class="stat-large-box border-top-dashed">
+                            <div class="stat-large-title">SESSION MONITORED VOLUME</div>
+                            <div class="stat-large-value text-amber" id="session-volume">$0.00</div>
+                            <div class="stat-sub-title" id="session-trades-count">0 TRADES MONITORED</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Control Console Panel -->
+                <div class="panel-box" style="flex-shrink: 0;">
+                    <h2 class="panel-title">TERMINAL CONSOLE</h2>
+                    <div class="panel-content console-controls">
+                        <div class="control-row">
+                            <span class="control-label">SOUND EFFECTS:</span>
+                            <button id="sound-toggle-btn" class="toggle-btn on">ON</button>
+                        </div>
+                        <div class="control-row">
+                            <span class="control-label">AUTO PAPER TRADING:</span>
+                            <label class="switch-container" style="display: flex; align-items: center; cursor: pointer;">
+                                <input type="checkbox" id="paper-trading-toggle" style="cursor: pointer; margin-right: 6px;" checked>
+                                <span class="text-white" style="font-size: 11px; font-weight: bold;">ACTIVE</span>
+                            </label>
+                        </div>
+                        <div class="control-row">
+                            <span class="control-label">LIVE DATA FEED:</span>
+                            <span class="feed-status inactive" id="feed-status">SUSPENDED</span>
+                        </div>
+                        <div class="control-row">
+                            <span class="control-label">AUTO-RECONNECT:</span>
+                            <span class="text-green">ENABLED</span>
+                        </div>
+                        <div class="console-log" id="console-logs">
+                            [SYS] Ready. Search for a market ticker above to connect...
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Column: Visual Charts and Analysis -->
+            <section class="trades-panel" style="display: flex; flex-direction: column; gap: 8px;">
+                
+                <!-- Binance BTC price chart (TradingView 1s Candles) -->
+                <div class="panel-box flex-column-container" style="flex-grow: 1; min-height: 0; height: 100%;">
+                    <h2 class="panel-title">BINANCE BTC/USDT (1s CANDLES)</h2>
+                    <div class="panel-content chart-content" style="flex-grow: 1; display: flex; flex-direction: column; padding: 4px; position: relative;">
+                        <!-- Indicators bar -->
+                        <div class="chart-indicators-bar" id="btc-indicators-bar" style="margin-bottom: 4px;">
+                            <span class="indicator-item">BTC: <span id="live-btc-price" class="text-white" style="font-weight: bold;">$--.--</span></span>
+                            <span class="indicator-item">TARGET: <span id="btc-target-price" class="text-amber" style="font-weight: bold;">$--.--</span></span>
+                            <span class="indicator-item">DIFF: <span id="btc-price-diff" class="text-white" style="font-weight: bold;">$--.--</span></span>
+                            <span class="indicator-item">STATUS: <span id="btc-interval-status" class="text-white" style="font-weight: bold;">N/A</span></span>
+                            <span class="indicator-item">SIGNAL: <span id="btc-signal-bar" class="text-amber" style="font-weight: bold; letter-spacing: 0.5px;">NEUTRAL</span></span>
+                            <span class="indicator-item">TIME LEFT: <span id="btc-time-left" class="text-white" style="font-weight: bold;">--:--</span></span>
+                        </div>
+                        <div style="flex-grow: 1; min-height: 0; height: 100%; width: 100%; position: relative;">
+                            <!-- Floating indicators overlay on the chart -->
+                            <div id="chart-overlay-indicators" style="position: absolute; top: 10px; left: 10px; z-index: 10; background: rgba(18, 24, 36, 0.85); border: 1px solid var(--bb-border); padding: 8px 12px; font-family: var(--font-mono); font-size: 11px; display: flex; flex-direction: column; gap: 4px; pointer-events: none; border-radius: 2px;">
+                                <div><span style="color: var(--text-muted); font-weight: 600;">RSI (14):</span> <span id="btc-rsi-val" class="text-white" style="font-weight: bold;">--</span></div>
+                                <div><span style="color: var(--text-muted); font-weight: 600;">ATR (14):</span> <span id="btc-atr-val" class="text-white" style="font-weight: bold;">--</span></div>
+                                <div><span style="color: var(--text-muted); font-weight: 600;">VWAP:</span> <span id="btc-vwap-val" class="text-white" style="font-weight: bold;">--</span></div>
+                                <div style="border-top: 1px dashed var(--bb-border); padding-top: 4px; margin-top: 2px;">
+                                    <span style="color: var(--text-muted); font-weight: 600;">TOKEN RECOM:</span> <span id="btc-signal-val" class="text-white" style="font-weight: bold;">--</span>
+                                </div>
+                            </div>
+                            <div id="btc-tradingview-chart" style="height: 100%; width: 100%;"></div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <script src="trading.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
